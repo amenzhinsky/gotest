@@ -66,35 +66,43 @@ func colorize(r io.Reader) error {
 			return err
 		}
 
+		if strings.Contains(ev.Output, "goos: ") {
+			if states[ev.Package] == nil {
+				states[ev.Package] = map[string]string{}
+			}
+		}
+
 		// events without output describe package / test states,
 		// so we don't need to print anything we just maintain states map
-		if ev.Output == "" {
-			switch ev.Action {
-			case "run":
-				if states[ev.Package] == nil {
-					states[ev.Package] = map[string]string{}
-				}
-			case "pass", "fail", "skip":
-				if ev.Test == "" {
-					// stop tracking entire package, can only pass or fail
-					delete(states, ev.Package)
-				} else {
-					// stop tracking a single test
-					delete(states[ev.Package], ev.Test)
-				}
+		switch ev.Action {
+		case "run":
+			if states[ev.Package] == nil {
+				states[ev.Package] = map[string]string{}
+			}
+			continue
+		case "pass", "fail", "skip":
+			if ev.Test == "" {
+				// stop tracking entire package, can only pass or fail
+				delete(states, ev.Package)
+			} else {
+				// stop tracking a single test
+				delete(states[ev.Package], ev.Test)
 			}
 			continue
 		}
 
-		color := getOutputColor(ev.Output)
+		var color []int
 
 		// output events for the test should be colored the same way, for example:
 		// --- FAIL: TestFail (0.00s)
 		//     example_test.go:11: failure reason
-		if state := getOutputState(ev.Output); state != "" {
+		if state, c := getOutputState(ev.Output); state != "" {
 			states[ev.Package][ev.Test] = state
+			color = c
 		} else if state := states[ev.Package][ev.Test]; state != "" {
 			color = getOutputColor(state)
+		} else {
+			color = getOutputColor(ev.Output)
 		}
 
 		for _, c := range color {
@@ -106,16 +114,46 @@ func colorize(r io.Reader) error {
 	return nil
 }
 
-func getOutputState(s string) string {
+const (
+	stateFail = "--- FAIL: Test"
+	statePass = "--- PASS: Test"
+	stateSkip = "--- SKIP: Test"
+)
+
+var colors = map[string][]int{
+	stateFail: {termRed},
+	statePass: {termGreen},
+	stateSkip: {termYellow},
+
+	"=== RUN   Test": {termWhite},
+	"=== PAUSE Test": {termDarkGray},
+	"=== CONT  Test": {termDarkGray},
+	"PASS\n":         {termBold, termGreen},
+	"ok  \t":         {termBold, termGreen},
+	"FAIL\n":         {termBold, termRed},
+	"FAIL\t":         {termBold, termRed},
+	"?   \t":         {termBold, termYellow},
+}
+
+const (
+	termBold     = 1
+	termRed      = 31
+	termGreen    = 32
+	termYellow   = 33
+	termDarkGray = 90
+	termWhite    = 97
+)
+
+func getOutputState(s string) (string, []int) {
 	switch {
 	case strings.HasPrefix(s, stateFail):
-		return stateFail
+		return stateFail, []int{termRed}
 	case strings.HasPrefix(s, statePass):
-		return statePass
+		return statePass, []int{termGreen}
 	case strings.HasPrefix(s, stateSkip):
-		return stateSkip
+		return stateSkip, []int{termYellow}
 	default:
-		return ""
+		return "", nil
 	}
 }
 
@@ -127,33 +165,6 @@ func getOutputColor(s string) []int {
 	}
 	return nil
 }
-
-const (
-	stateFail = "--- FAIL"
-	statePass = "--- PASS"
-	stateSkip = "--- SKIP"
-)
-
-var colors = map[string][]int{
-	// "=== RUN":   0,
-	stateFail:   {termRed},
-	statePass:   {termGreen},
-	stateSkip:   {termYellow},
-	"=== PAUSE": {termDarkGray},
-	"=== CONT":  {termDarkGray},
-	"PASS":      {termBold, termGreen},
-	"ok":        {termBold, termGreen},
-	"FAIL":      {termBold, termRed},
-	"?":         {termBold, termYellow},
-}
-
-const (
-	termBold     = 1
-	termRed      = 31
-	termGreen    = 32
-	termYellow   = 33
-	termDarkGray = 90
-)
 
 // go doc test2json
 type event struct {
