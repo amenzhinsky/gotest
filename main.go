@@ -91,18 +91,15 @@ func colorize(r io.Reader) error {
 			continue
 		}
 
-		var color []int
+		color := getOutputColor(ev.Output)
 
 		// output events for the test should be colored the same way, for example:
 		// --- FAIL: TestFail (0.00s)
 		//     example_test.go:11: failure reason
-		if state, c := getOutputState(ev.Output); state != "" {
+		if state := getOutputState(ev.Output); state != "" {
 			states[ev.Package][ev.Test] = state
-			color = c
 		} else if state := states[ev.Package][ev.Test]; state != "" {
 			color = getOutputColor(state)
-		} else {
-			color = getOutputColor(ev.Output)
 		}
 
 		for _, c := range color {
@@ -144,16 +141,16 @@ const (
 	termWhite    = 97
 )
 
-func getOutputState(s string) (string, []int) {
+func getOutputState(s string) string {
 	switch {
 	case strings.HasPrefix(s, stateFail):
-		return stateFail, []int{termRed}
+		return stateFail
 	case strings.HasPrefix(s, statePass):
-		return statePass, []int{termGreen}
+		return statePass
 	case strings.HasPrefix(s, stateSkip):
-		return stateSkip, []int{termYellow}
+		return stateSkip
 	default:
-		return "", nil
+		return ""
 	}
 }
 
