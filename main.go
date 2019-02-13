@@ -6,9 +6,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
+	"runtime"
 	"strings"
 	"syscall"
-	"time"
 )
 
 func main() {
@@ -53,9 +54,24 @@ func run() error {
 	return cmd.Run()
 }
 
+var runBenchmarkRegexp = regexp.MustCompile("^Benchmark.+-")
+
+func runBenchmarkEvent(s string) string {
+	if loc := runBenchmarkRegexp.FindStringIndex(s); loc != nil {
+		return s[loc[0] : loc[1]-1]
+	}
+	return ""
+}
+
+func isBenchmarkEnd(s string) bool {
+	return strings.HasSuffix(s, " allocs/op\n") || strings.HasSuffix(s, " ns/op\n")
+}
+
 func colorize(r io.Reader) error {
 	stream := json.NewDecoder(r)
 	states := map[string]map[string]string{}
+
+	var waitForBench string
 
 	for {
 		var ev event
@@ -66,10 +82,24 @@ func colorize(r io.Reader) error {
 			return err
 		}
 
-		if strings.Contains(ev.Output, "goos: ") {
-			if states[ev.Package] == nil {
-				states[ev.Package] = map[string]string{}
-			}
+		// test2json has issues with events consistency when dealing with benchmarks
+		// so we need to determine correct benchmark name instead of a test name here
+		if ev.Output == "goos: "+runtime.GOOS+"\n" ||
+			ev.Output == "goarch: "+runtime.GOARCH+"\n" ||
+			strings.HasPrefix(ev.Output, "pkg: ") {
+			continue
+		} else if s := runBenchmarkEvent(ev.Output); s != "" {
+			ev.Test = s
+			ev.Output = "=== " + ev.Output
+			waitForBench = s
+			// TODO: run event is not triggered for benchmarks
+		} else if waitForBench != "" && ev.Action == "output" && isBenchmarkEnd(ev.Output) {
+			ev.Test = waitForBench
+		} else if waitForBench != "" {
+			ev.Test = waitForBench
+			waitForBench = ""
+		} else {
+			waitForBench = ""
 		}
 
 		// events without output describe package / test states,
@@ -112,9 +142,9 @@ func colorize(r io.Reader) error {
 }
 
 const (
-	stateFail = "--- FAIL: Test"
+	stateFail = "--- FAIL: "
 	statePass = "--- PASS: Test"
-	stateSkip = "--- SKIP: Test"
+	stateSkip = "--- SKIP: "
 )
 
 var colors = map[string][]int{
@@ -165,10 +195,10 @@ func getOutputColor(s string) []int {
 
 // go doc test2json
 type event struct {
-	Time    time.Time
+	// Time time.Time
+	// Elapsed float64
 	Action  string
 	Package string
 	Test    string
-	Elapsed float64
 	Output  string
 }

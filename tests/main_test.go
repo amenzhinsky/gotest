@@ -21,25 +21,23 @@ func TestMain3(t *testing.T) {
 	time.Sleep(time.Second)
 }
 
-func BenchmarkFib(b *testing.B) {
+func BenchmarkPass(b *testing.B) {
 	b.ReportAllocs()
-	z := 0
 	for i := 0; i < b.N; i++ {
-		z += i
+		time.Sleep(time.Millisecond)
 	}
 }
 
-func BenchmarkFib2(b *testing.B) {
+func BenchmarkAllocs(b *testing.B) {
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		time.Sleep(10 * time.Millisecond)
-	}
-	b.Error("asdf")
 }
 
-func BenchmarkFib3(b *testing.B) {
+func BenchmarkError(b *testing.B) {
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		time.Sleep(10 * time.Millisecond)
-	}
+	b.Error("something went wrong")
+}
+
+func BenchmarkSkip(b *testing.B) {
+	b.ReportAllocs()
+	b.Skip("reason why")
 }
