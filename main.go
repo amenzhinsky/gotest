@@ -92,10 +92,9 @@ func colorize(r io.Reader) error {
 			ev.Test = s
 			ev.Output = "=== " + ev.Output
 			waitForBench = s
-			// TODO: run event is not triggered for benchmarks
 		} else if waitForBench != "" && ev.Action == "output" && isBenchmarkEnd(ev.Output) {
 			ev.Test = waitForBench
-		} else if waitForBench != "" {
+		} else if waitForBench != "" && ev.Test == "" {
 			ev.Test = waitForBench
 			waitForBench = ""
 		} else {
@@ -106,10 +105,7 @@ func colorize(r io.Reader) error {
 		// so we don't need to print anything we just maintain states map
 		switch ev.Action {
 		case "run":
-			if states[ev.Package] == nil {
-				states[ev.Package] = map[string]string{}
-			}
-			continue
+			// nothing needed
 		case "pass", "fail", "skip":
 			if ev.Test == "" {
 				// stop tracking entire package, can only pass or fail
@@ -118,25 +114,29 @@ func colorize(r io.Reader) error {
 				// stop tracking a single test
 				delete(states[ev.Package], ev.Test)
 			}
-			continue
-		}
+		case "output", "pause", "cont":
+			if states[ev.Package] == nil {
+				states[ev.Package] = map[string]string{}
+			}
 
-		color := getOutputColor(ev.Output)
+			color := getOutputColor(ev.Output)
 
-		// output events for the test should be colored the same way, for example:
-		// --- FAIL: TestFail (0.00s)
-		//     example_test.go:11: failure reason
-		if state := getOutputState(ev.Output); state != "" {
-			states[ev.Package][ev.Test] = state
-		} else if state := states[ev.Package][ev.Test]; state != "" {
-			color = getOutputColor(state)
+			// output events for the test should be colored the same way, for example:
+			// --- FAIL: TestFail (0.00s)
+			//     example_test.go:11: failure reason
+			if state := getOutputState(ev.Output); state != "" {
+				states[ev.Package][ev.Test] = state
+			} else if state := states[ev.Package][ev.Test]; state != "" {
+				color = getOutputColor(state)
+			}
+			for _, c := range color {
+				fmt.Printf("\033[%dm", c)
+			}
+			fmt.Print(ev.Output)
+			fmt.Print("\033[0m")
+		default:
+			panic(fmt.Sprintf("unknown event action %q", ev.Action))
 		}
-
-		for _, c := range color {
-			fmt.Printf("\033[%dm", c)
-		}
-		fmt.Print(ev.Output)
-		fmt.Print("\033[0m")
 	}
 	return nil
 }

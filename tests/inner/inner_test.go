@@ -2,11 +2,14 @@ package inner
 
 import "testing"
 
-func TestFoo(t *testing.T) {
-	t.Parallel()
-	t.Skip()
+func TestSuccess(t *testing.T) {
+
 }
 
-func TestFail(t *testing.T) {
-	t.Fatal("foo")
+func TestFailure(t *testing.T) {
+	t.Fatal("something went wrong")
+}
+
+func TestSkip(t *testing.T) {
+	t.Skip("let's skip it for now")
 }
